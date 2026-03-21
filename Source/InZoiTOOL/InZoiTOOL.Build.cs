@@ -15,15 +15,21 @@ public class InZoiTOOL : ModuleRules
             "EnhancedInput",
             "UMG",
             "Slate",
-            "SlateCore"
+            "SlateCore",
+            "Json",
+            "JsonUtilities"
         });
 
         PrivateDependencyModuleNames.AddRange(new string[]
         {
             "RenderCore",
-            "RHI",
-            "Lua"
+            "RHI"
         });
+
+        // Lua scripting support - uncomment when inZOI's Lua runtime is available
+        // PrivateDependencyModuleNames.Add("Lua");
+        // PrivateDefinitions.Add("WITH_LUA=1");
+        PrivateDefinitions.Add("WITH_LUA=0");
 
         PublicIncludePaths.AddRange(new string[]
         {

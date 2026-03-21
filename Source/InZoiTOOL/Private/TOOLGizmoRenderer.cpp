@@ -1,11 +1,15 @@
 #include "TOOLGizmoRenderer.h"
-#include "DrawDebugHelpers.h"
+#include "Components/LineBatchComponent.h"
 #include "Engine/World.h"
 
 ATOOLGizmoRenderer::ATOOLGizmoRenderer()
 {
     PrimaryActorTick.bCanEverTick = true;
     PrimaryActorTick.bStartWithTickEnabled = false;
+
+    // LineBatchComponent renders lines in all build configs (unlike DrawDebugLine)
+    LineBatcher = CreateDefaultSubobject<ULineBatchComponent>(TEXT("GizmoLines"));
+    RootComponent = LineBatcher;
 }
 
 void ATOOLGizmoRenderer::BeginPlay()
@@ -21,6 +25,12 @@ void ATOOLGizmoRenderer::Tick(float DeltaSeconds)
     {
         SetActorTickEnabled(false);
         return;
+    }
+
+    // Clear previous frame's lines
+    if (LineBatcher)
+    {
+        LineBatcher->Flush();
     }
 
     // Update gizmo position to follow the target
@@ -44,6 +54,7 @@ void ATOOLGizmoRenderer::AttachToTarget(AActor* Target)
     {
         SetActorLocation(Target->GetActorLocation());
         SetActorTickEnabled(true);
+        SetActorHiddenInGame(false);
     }
 }
 
@@ -51,6 +62,11 @@ void ATOOLGizmoRenderer::Detach()
 {
     TargetActor = nullptr;
     SetActorTickEnabled(false);
+    SetActorHiddenInGame(true);
+    if (LineBatcher)
+    {
+        LineBatcher->Flush();
+    }
 }
 
 void ATOOLGizmoRenderer::UpdateGizmoState(EManipulationMode Mode,
@@ -113,7 +129,6 @@ void ATOOLGizmoRenderer::DrawScaleGizmo()
     bool bZActive = (CurrentActiveAxis == EManipulationAxis::Z ||
                      CurrentActiveAxis == EManipulationAxis::XYZ);
 
-    // Draw axis lines with scale handles (cubes) at the ends
     FLinearColor XC = bXActive ? HighlightColor : XColor;
     FLinearColor YC = bYActive ? HighlightColor : YColor;
     FLinearColor ZC = bZActive ? HighlightColor : ZColor;
@@ -122,12 +137,9 @@ void ATOOLGizmoRenderer::DrawScaleGizmo()
     FVector YEnd = Origin + FVector::RightVector * ArrowLength;
     FVector ZEnd = Origin + FVector::UpVector * ArrowLength;
 
-    DrawDebugLine(GetWorld(), Origin, XEnd, XC.ToFColor(true), false, -1.f,
-        0, ArrowThickness);
-    DrawDebugLine(GetWorld(), Origin, YEnd, YC.ToFColor(true), false, -1.f,
-        0, ArrowThickness);
-    DrawDebugLine(GetWorld(), Origin, ZEnd, ZC.ToFColor(true), false, -1.f,
-        0, ArrowThickness);
+    DrawLine(Origin, XEnd, XC.ToFColor(true), ArrowThickness);
+    DrawLine(Origin, YEnd, YC.ToFColor(true), ArrowThickness);
+    DrawLine(Origin, ZEnd, ZC.ToFColor(true), ArrowThickness);
 
     DrawScaleHandle(XEnd, XC, bXActive);
     DrawScaleHandle(YEnd, YC, bYActive);
@@ -141,24 +153,20 @@ void ATOOLGizmoRenderer::DrawElevateGizmo()
     bool bActive = (CurrentActiveAxis == EManipulationAxis::Z ||
                     CurrentActiveAxis == EManipulationAxis::XYZ);
 
-    // Draw a vertical line with arrows at both ends
     FLinearColor Color = bActive ? HighlightColor : ZColor;
     FColor FlatColor = Color.ToFColor(true);
 
     FVector Top = Origin + FVector::UpVector * ArrowLength;
     FVector Bottom = Origin - FVector::UpVector * ArrowLength * 0.5f;
 
-    DrawDebugLine(GetWorld(), Bottom, Top, FlatColor, false, -1.f,
-        0, ArrowThickness * 1.5f);
+    DrawLine(Bottom, Top, FlatColor, ArrowThickness * 1.5f);
 
     // Draw arrowheads
     float HeadSize = ArrowLength * 0.1f;
-    DrawDebugLine(GetWorld(), Top,
-        Top - FVector::UpVector * HeadSize + FVector::ForwardVector * HeadSize,
-        FlatColor, false, -1.f, 0, ArrowThickness);
-    DrawDebugLine(GetWorld(), Top,
-        Top - FVector::UpVector * HeadSize - FVector::ForwardVector * HeadSize,
-        FlatColor, false, -1.f, 0, ArrowThickness);
+    DrawLine(Top, Top - FVector::UpVector * HeadSize + FVector::ForwardVector * HeadSize,
+        FlatColor, ArrowThickness);
+    DrawLine(Top, Top - FVector::UpVector * HeadSize - FVector::ForwardVector * HeadSize,
+        FlatColor, ArrowThickness);
 
     // Draw a ground plane indicator (dashed circle at origin)
     const int32 Segments = 32;
@@ -175,18 +183,17 @@ void ATOOLGizmoRenderer::DrawElevateGizmo()
             FVector P1 = Origin + FVector(
                 FMath::Cos(Angle1) * RingRadius * 0.5f,
                 FMath::Sin(Angle1) * RingRadius * 0.5f, 0.f);
-            DrawDebugLine(GetWorld(), P0, P1, FlatColor, false, -1.f,
-                0, ArrowThickness * 0.5f);
+            DrawLine(P0, P1, FlatColor, ArrowThickness * 0.5f);
         }
     }
 }
 
 // ============================================================================
-// Primitive Drawing Helpers
+// Primitive Drawing Helpers (using LineBatchComponent for shipping builds)
 // ============================================================================
 
 void ATOOLGizmoRenderer::DrawAxisArrow(FVector Origin, FVector Direction,
-    FLinearColor Color, bool bHighlighted) const
+    FLinearColor Color, bool bHighlighted)
 {
     FLinearColor DrawColor = bHighlighted ? HighlightColor : Color;
     FColor FlatColor = DrawColor.ToFColor(true);
@@ -195,7 +202,7 @@ void ATOOLGizmoRenderer::DrawAxisArrow(FVector Origin, FVector Direction,
     FVector End = Origin + Direction * ArrowLength;
 
     // Main line
-    DrawDebugLine(GetWorld(), Origin, End, FlatColor, false, -1.f, 0, Thickness);
+    DrawLine(Origin, End, FlatColor, Thickness);
 
     // Arrowhead
     float HeadSize = ArrowLength * 0.1f;
@@ -204,14 +211,14 @@ void ATOOLGizmoRenderer::DrawAxisArrow(FVector Origin, FVector Direction,
         Right = FVector::CrossProduct(Direction, FVector::ForwardVector);
     Right.Normalize();
 
-    DrawDebugLine(GetWorld(), End, End - Direction * HeadSize + Right * HeadSize,
-        FlatColor, false, -1.f, 0, Thickness);
-    DrawDebugLine(GetWorld(), End, End - Direction * HeadSize - Right * HeadSize,
-        FlatColor, false, -1.f, 0, Thickness);
+    DrawLine(End, End - Direction * HeadSize + Right * HeadSize,
+        FlatColor, Thickness);
+    DrawLine(End, End - Direction * HeadSize - Right * HeadSize,
+        FlatColor, Thickness);
 }
 
 void ATOOLGizmoRenderer::DrawRotationRing(FVector Origin, FVector Axis,
-    FLinearColor Color, bool bHighlighted) const
+    FLinearColor Color, bool bHighlighted)
 {
     FLinearColor DrawColor = bHighlighted ? HighlightColor : Color;
     FColor FlatColor = DrawColor.ToFColor(true);
@@ -232,16 +239,57 @@ void ATOOLGizmoRenderer::DrawRotationRing(FVector Origin, FVector Axis,
         FVector P1 = Origin + (Perp1 * FMath::Cos(Angle1) +
             Perp2 * FMath::Sin(Angle1)) * RingRadius;
 
-        DrawDebugLine(GetWorld(), P0, P1, FlatColor, false, -1.f, 0, Thickness);
+        DrawLine(P0, P1, FlatColor, Thickness);
     }
 }
 
 void ATOOLGizmoRenderer::DrawScaleHandle(FVector Position, FLinearColor Color,
-    bool bHighlighted) const
+    bool bHighlighted)
 {
     FLinearColor DrawColor = bHighlighted ? HighlightColor : Color;
     float Size = bHighlighted ? ScaleHandleSize * 1.5f : ScaleHandleSize;
 
-    DrawDebugBox(GetWorld(), Position, FVector(Size), DrawColor.ToFColor(true),
-        false, -1.f, 0, ArrowThickness);
+    DrawBox(Position, FVector(Size), DrawColor.ToFColor(true), ArrowThickness);
+}
+
+void ATOOLGizmoRenderer::DrawLine(FVector Start, FVector End, FColor Color,
+    float Thickness)
+{
+    if (LineBatcher)
+    {
+        LineBatcher->DrawLine(Start, End, Color, 0, Thickness, 0.f);
+    }
+}
+
+void ATOOLGizmoRenderer::DrawBox(FVector Center, FVector Extent, FColor Color,
+    float Thickness)
+{
+    if (!LineBatcher) return;
+
+    // Draw 12 edges of a box
+    FVector Min = Center - Extent;
+    FVector Max = Center + Extent;
+
+    FVector Corners[8] = {
+        FVector(Min.X, Min.Y, Min.Z), FVector(Max.X, Min.Y, Min.Z),
+        FVector(Max.X, Max.Y, Min.Z), FVector(Min.X, Max.Y, Min.Z),
+        FVector(Min.X, Min.Y, Max.Z), FVector(Max.X, Min.Y, Max.Z),
+        FVector(Max.X, Max.Y, Max.Z), FVector(Min.X, Max.Y, Max.Z),
+    };
+
+    // Bottom face
+    DrawLine(Corners[0], Corners[1], Color, Thickness);
+    DrawLine(Corners[1], Corners[2], Color, Thickness);
+    DrawLine(Corners[2], Corners[3], Color, Thickness);
+    DrawLine(Corners[3], Corners[0], Color, Thickness);
+    // Top face
+    DrawLine(Corners[4], Corners[5], Color, Thickness);
+    DrawLine(Corners[5], Corners[6], Color, Thickness);
+    DrawLine(Corners[6], Corners[7], Color, Thickness);
+    DrawLine(Corners[7], Corners[4], Color, Thickness);
+    // Verticals
+    DrawLine(Corners[0], Corners[4], Color, Thickness);
+    DrawLine(Corners[1], Corners[5], Color, Thickness);
+    DrawLine(Corners[2], Corners[6], Color, Thickness);
+    DrawLine(Corners[3], Corners[7], Color, Thickness);
 }

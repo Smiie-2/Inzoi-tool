@@ -1,8 +1,24 @@
 #include "TOOLSettings.h"
+#include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 #include "Misc/Paths.h"
+
+namespace
+{
+    /** Helper: read a JSON number field into a float via double intermediary */
+    bool TryGetFloat(const TSharedPtr<FJsonObject>& Obj, const FString& Key, float& OutVal)
+    {
+        double Temp;
+        if (Obj->TryGetNumberField(Key, Temp))
+        {
+            OutVal = static_cast<float>(Temp);
+            return true;
+        }
+        return false;
+    }
+}
 
 const FString UTOOLSettings::SettingsFilePath =
     FPaths::ProjectPluginsDir() / TEXT("InZoiTOOL/Config/tool_settings.json");
@@ -140,8 +156,8 @@ void UTOOLSettings::LoadFromJson()
     // Movement
     if (const TSharedPtr<FJsonObject>* Movement; Root->TryGetObjectField(TEXT("movement"), Movement))
     {
-        (*Movement)->TryGetNumberField(TEXT("gridSnap"), MoveGridSnap);
-        (*Movement)->TryGetNumberField(TEXT("speed"), MoveSpeed);
+        TryGetFloat(*Movement, TEXT("gridSnap"), MoveGridSnap);
+        TryGetFloat(*Movement, TEXT("speed"), MoveSpeed);
         (*Movement)->TryGetBoolField(TEXT("allowOffLot"), bAllowOffLot);
         (*Movement)->TryGetBoolField(TEXT("snapToTerrain"), bSnapToTerrain);
         (*Movement)->TryGetBoolField(TEXT("snapCameraToObject"), bSnapCameraToObject);
@@ -150,23 +166,23 @@ void UTOOLSettings::LoadFromJson()
     // Rotation
     if (const TSharedPtr<FJsonObject>* Rotation; Root->TryGetObjectField(TEXT("rotation"), Rotation))
     {
-        (*Rotation)->TryGetNumberField(TEXT("gridSnap"), RotateGridSnap);
-        (*Rotation)->TryGetNumberField(TEXT("speed"), RotateSpeed);
+        TryGetFloat(*Rotation, TEXT("gridSnap"), RotateGridSnap);
+        TryGetFloat(*Rotation, TEXT("speed"), RotateSpeed);
     }
 
     // Scale
     if (const TSharedPtr<FJsonObject>* Scale; Root->TryGetObjectField(TEXT("scale"), Scale))
     {
-        (*Scale)->TryGetNumberField(TEXT("gridSnap"), ScaleGridSnap);
-        (*Scale)->TryGetNumberField(TEXT("minScale"), MinScale);
-        (*Scale)->TryGetNumberField(TEXT("maxScale"), MaxScale);
-        (*Scale)->TryGetNumberField(TEXT("speed"), ScaleSpeed);
+        TryGetFloat(*Scale, TEXT("gridSnap"), ScaleGridSnap);
+        TryGetFloat(*Scale, TEXT("minScale"), MinScale);
+        TryGetFloat(*Scale, TEXT("maxScale"), MaxScale);
+        TryGetFloat(*Scale, TEXT("speed"), ScaleSpeed);
     }
 
     // Elevation
     if (const TSharedPtr<FJsonObject>* Elevation; Root->TryGetObjectField(TEXT("elevation"), Elevation))
     {
-        (*Elevation)->TryGetNumberField(TEXT("step"), ElevationStep);
+        TryGetFloat(*Elevation, TEXT("step"), ElevationStep);
     }
 
     // Visuals
@@ -181,10 +197,8 @@ void UTOOLSettings::LoadFromJson()
             ZAxisColor = JsonToColor(*ColorObj);
         if ((*Visuals)->TryGetObjectField(TEXT("activeAxisColor"), ColorObj))
             ActiveAxisColor = JsonToColor(*ColorObj);
-        (*Visuals)->TryGetNumberField(TEXT("selectionOutlineOpacity"), SelectionOutlineOpacity);
-        double GizmoSizeD;
-        if ((*Visuals)->TryGetNumberField(TEXT("gizmoSize"), GizmoSizeD))
-            GizmoSize = static_cast<float>(GizmoSizeD);
+        TryGetFloat(*Visuals, TEXT("selectionOutlineOpacity"), SelectionOutlineOpacity);
+        TryGetFloat(*Visuals, TEXT("gizmoSize"), GizmoSize);
     }
 
     // Undo

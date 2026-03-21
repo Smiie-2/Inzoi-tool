@@ -17,19 +17,35 @@ UTOOLInputHandler::UTOOLInputHandler()
 void UTOOLInputHandler::BeginPlay()
 {
     Super::BeginPlay();
-    SetupInputBindings();
 
     // Apply settings
     if (const UTOOLSettings* Settings = UTOOLSettings::Get())
     {
         DragSensitivity = Settings->MoveSpeed;
     }
+
+    // Input bindings are deferred to the first tick to ensure the
+    // PlayerController is fully initialized (may not be ready in BeginPlay)
 }
 
 void UTOOLInputHandler::TickComponent(float DeltaTime, ELevelTick TickType,
     FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+    // Deferred input setup - wait for player controller to be ready
+    if (!bInputBound)
+    {
+        if (APlayerController* PC = GetWorld()->GetFirstPlayerController())
+        {
+            if (PC->InputComponent)
+            {
+                SetupInputBindings();
+                bInputBound = true;
+            }
+        }
+        return; // Skip tracking until input is bound
+    }
 
     // Track mouse position for drag calculations
     if (APlayerController* PC = GetWorld()->GetFirstPlayerController())

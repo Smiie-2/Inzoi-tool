@@ -164,6 +164,7 @@ private:
 
     FVector2D LastMousePosition = FVector2D::ZeroVector;
     bool bIsDragging = false;
+    bool bInputBound = false;
 
     /** Original transform stored for the Delete/Reset action */
     TMap<TWeakObjectPtr<AActor>, FTransform> OriginalTransforms;

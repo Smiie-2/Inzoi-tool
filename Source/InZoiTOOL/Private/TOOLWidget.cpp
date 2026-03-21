@@ -123,14 +123,23 @@ void UTOOLWidget::ShowTool()
 {
     bIsVisible = true;
     SetVisibility(ESlateVisibility::Visible);
-    PlayAnimation(FindAnimation(TEXT("FadeIn")));
+    if (FadeIn)
+    {
+        PlayAnimation(FadeIn);
+    }
 }
 
 void UTOOLWidget::HideTool()
 {
     bIsVisible = false;
-    PlayAnimation(FindAnimation(TEXT("FadeOut")));
-    // SetVisibility called after animation in a timer or animation event
+    if (FadeOut)
+    {
+        PlayAnimation(FadeOut);
+    }
+    else
+    {
+        SetVisibility(ESlateVisibility::Collapsed);
+    }
 }
 
 void UTOOLWidget::OpenCoordinateInput()

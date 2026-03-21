@@ -11,6 +11,7 @@ class UEditableTextBox;
 class UImage;
 class UCanvasPanel;
 class UBorder;
+class UWidgetAnimation;
 
 /**
  * Main HUD widget for the T.O.O.L. overlay.
@@ -130,6 +131,14 @@ protected:
 
     UPROPERTY(meta = (BindWidget))
     TObjectPtr<UTextBlock> StatusText;
+
+    /** Optional fade-in animation (created in Widget Blueprint) */
+    UPROPERTY(Transient, meta = (BindWidgetAnimOptional))
+    TObjectPtr<UWidgetAnimation> FadeIn;
+
+    /** Optional fade-out animation (created in Widget Blueprint) */
+    UPROPERTY(Transient, meta = (BindWidgetAnimOptional))
+    TObjectPtr<UWidgetAnimation> FadeOut;
 
 private:
     UFUNCTION()
