@@ -1,0 +1,15 @@
+{
+    "allowOffLot": true,
+    "elevationStep": 0.5,
+    "gizmoSize": 100.0,
+    "maxScale": 10.0,
+    "maxUndoSteps": 100,
+    "minScale": 0.1,
+    "moveGridSnap": 0.0,
+    "moveSpeed": 1.0,
+    "rotateGridSnap": 0.0,
+    "rotateSpeed": 1.0,
+    "scaleGridSnap": 0.0,
+    "scaleSpeed": 1.0,
+    "snapToTerrain": false
+}

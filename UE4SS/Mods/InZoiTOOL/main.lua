@@ -1,0 +1,312 @@
+-- ============================================================================
+-- InZoi T.O.O.L. - Takes Objects Off Lot
+-- UE4SS Lua Mod - Main Entry Point
+--
+-- Advanced object manipulation for inZOI: freely move, rotate, scale, and
+-- elevate any in-game object with precision controls.
+--
+-- Requires: UE4SS (https://github.com/UE4SS-RE/RE-UE4SS)
+--           inZOI Mod Enabler (Nexus Mods)
+-- ============================================================================
+
+local ModName = "InZoiTOOL"
+print(string.format("[%s] Loading T.O.O.L. - Takes Objects Off Lot...\n", ModName))
+
+-- Resolve mod directory for file I/O
+local modDir = UEHelpers and UEHelpers.GetCurrentModPath and UEHelpers.GetCurrentModPath()
+if not modDir then
+    -- Fallback: construct path from known UE4SS mod layout
+    modDir = ".\\ue4ss\\Mods\\" .. ModName
+end
+
+-- Load modules
+local Settings = require("settings")
+local Manipulator = require("manipulator")
+local Macros = require("macros")
+local UI = require("ui")
+
+-- Initialize settings
+Settings.init(modDir)
+
+-- Wire up module references
+UI.manipulator = Manipulator
+UI.macros = Macros
+
+-- ============================================================================
+-- Tool State
+-- ============================================================================
+
+local toolActive = false
+
+local function toggleTool()
+    toolActive = not toolActive
+    UI.visible = toolActive
+    if toolActive then
+        print("[InZoi TOOL] Activated\n")
+        UI.setStatus("T.O.O.L. activated - select an object to begin")
+    else
+        print("[InZoi TOOL] Deactivated\n")
+    end
+end
+
+-- ============================================================================
+-- Keybindings
+-- ============================================================================
+
+-- F2: Toggle tool
+RegisterKeyBind(Key.F2, function()
+    toggleTool()
+end)
+
+-- Mode keys (only when tool is active)
+RegisterKeyBind(Key.G, function()
+    if not toolActive then return end
+    Manipulator.setMode("move")
+    UI.setStatus("Mode: MOVE")
+end)
+
+RegisterKeyBind(Key.R, function()
+    if not toolActive then return end
+    Manipulator.setMode("rotate")
+    UI.setStatus("Mode: ROTATE")
+end)
+
+RegisterKeyBind(Key.S, function()
+    if not toolActive then return end
+    Manipulator.setMode("scale")
+    UI.setStatus("Mode: SCALE")
+end)
+
+RegisterKeyBind(Key.E, function()
+    if not toolActive then return end
+    Manipulator.setMode("elevate")
+    UI.setStatus("Mode: ELEVATE")
+end)
+
+-- Axis keys
+RegisterKeyBind(Key.X, function()
+    if not toolActive then return end
+    Manipulator.setAxis("x")
+    UI.setStatus("Axis: X")
+end)
+
+RegisterKeyBind(Key.Y, function()
+    if not toolActive then return end
+    Manipulator.setAxis("y")
+    UI.setStatus("Axis: Y")
+end)
+
+RegisterKeyBind(Key.Z, function()
+    if not toolActive then return end
+    Manipulator.setAxis("z")
+    UI.setStatus("Axis: Z")
+end)
+
+RegisterKeyBind(Key.TAB, function()
+    if not toolActive then return end
+    Manipulator.cycleAxis()
+    UI.setStatus("Axis: " .. Manipulator.getAxisDisplayName())
+end)
+
+-- Undo/Redo
+RegisterKeyBind(Key.Z, {ModifierKey.CONTROL}, function()
+    if not toolActive then return end
+    Manipulator.undo()
+    UI.setStatus("Undo")
+end)
+
+RegisterKeyBind(Key.Y, {ModifierKey.CONTROL}, function()
+    if not toolActive then return end
+    Manipulator.redo()
+    UI.setStatus("Redo")
+end)
+
+-- Numeric input
+RegisterKeyBind(Key.N, function()
+    if not toolActive then return end
+    UI.showCoordinateInput = not UI.showCoordinateInput
+end)
+
+-- Reset transform
+RegisterKeyBind(Key.DELETE, function()
+    if not toolActive then return end
+    Manipulator.resetTransform()
+    UI.setStatus("Transform reset")
+end)
+
+-- Deselect
+RegisterKeyBind(Key.ESCAPE, function()
+    if not toolActive then return end
+    Manipulator.deselect()
+    UI.setStatus("Deselected")
+end)
+
+-- ============================================================================
+-- Scroll wheel for fine adjustments
+-- We use LoopAsync to poll for scroll state since UE4SS doesn't have
+-- a direct scroll event. Instead, we handle this through the ImGui UI.
+-- ============================================================================
+
+-- Movement nudge keys (arrow keys with shift for fine control)
+RegisterKeyBind(Key.UP, function()
+    if not toolActive or not Manipulator.hasSelection() then return end
+    local speed = Settings.get("moveSpeed") or 1.0
+    if Manipulator.currentMode == "move" then
+        Manipulator.move(speed, 0, 0)
+    elseif Manipulator.currentMode == "rotate" then
+        Manipulator.rotateByAngle(5.0)
+    elseif Manipulator.currentMode == "elevate" then
+        Manipulator.elevate(Settings.get("elevationStep") or 0.5)
+    elseif Manipulator.currentMode == "scale" then
+        Manipulator.scaleUniform(1.05)
+    end
+end)
+
+RegisterKeyBind(Key.DOWN, function()
+    if not toolActive or not Manipulator.hasSelection() then return end
+    local speed = Settings.get("moveSpeed") or 1.0
+    if Manipulator.currentMode == "move" then
+        Manipulator.move(-speed, 0, 0)
+    elseif Manipulator.currentMode == "rotate" then
+        Manipulator.rotateByAngle(-5.0)
+    elseif Manipulator.currentMode == "elevate" then
+        Manipulator.elevate(-(Settings.get("elevationStep") or 0.5))
+    elseif Manipulator.currentMode == "scale" then
+        Manipulator.scaleUniform(0.95)
+    end
+end)
+
+RegisterKeyBind(Key.LEFT, function()
+    if not toolActive or not Manipulator.hasSelection() then return end
+    local speed = Settings.get("moveSpeed") or 1.0
+    if Manipulator.currentMode == "move" then
+        Manipulator.move(0, -speed, 0)
+    elseif Manipulator.currentMode == "rotate" then
+        Manipulator.rotateByAngle(-15.0)
+    end
+end)
+
+RegisterKeyBind(Key.RIGHT, function()
+    if not toolActive or not Manipulator.hasSelection() then return end
+    local speed = Settings.get("moveSpeed") or 1.0
+    if Manipulator.currentMode == "move" then
+        Manipulator.move(0, speed, 0)
+    elseif Manipulator.currentMode == "rotate" then
+        Manipulator.rotateByAngle(15.0)
+    end
+end)
+
+-- Page Up / Page Down for elevation
+RegisterKeyBind(Key.PAGE_UP, function()
+    if not toolActive or not Manipulator.hasSelection() then return end
+    Manipulator.elevate(Settings.get("elevationStep") or 0.5)
+end)
+
+RegisterKeyBind(Key.PAGE_DOWN, function()
+    if not toolActive or not Manipulator.hasSelection() then return end
+    Manipulator.elevate(-(Settings.get("elevationStep") or 0.5))
+end)
+
+-- ============================================================================
+-- ImGui draw callback for the overlay UI
+-- ============================================================================
+
+RegisterDrawCallback(function()
+    UI.draw()
+end)
+
+-- ============================================================================
+-- Global TOOL API (for console and other mods to use)
+-- ============================================================================
+
+TOOL = {}
+
+TOOL.toggle = toggleTool
+TOOL.isActive = function() return toolActive end
+
+-- Selection
+TOOL.selectByClass = function(className)
+    local actor = FindFirstOf(className)
+    if actor and actor:IsValid() then
+        Manipulator.selectActor(actor)
+        return true
+    end
+    print("[InZoi TOOL] No instance of '" .. className .. "' found\n")
+    return false
+end
+
+TOOL.deselect = function() Manipulator.deselect() end
+TOOL.hasSelection = function() return Manipulator.hasSelection() end
+TOOL.getSelectedName = function() return Manipulator.selectedActorName end
+
+-- Manipulation
+TOOL.move = function(x, y, z) Manipulator.move(x or 0, y or 0, z or 0) end
+TOOL.moveTo = function(x, y, z) Manipulator.moveTo(x, y, z) end
+TOOL.rotate = function(p, y, r) Manipulator.rotate(p or 0, y or 0, r or 0) end
+TOOL.rotateTo = function(p, y, r) Manipulator.rotateTo(p, y, r) end
+TOOL.scale = function(f) Manipulator.scaleUniform(f) end
+TOOL.scaleTo = function(x, y, z) Manipulator.scaleTo(x, y, z) end
+TOOL.elevate = function(d) Manipulator.elevate(d) end
+TOOL.elevateTo = function(h) Manipulator.elevateTo(h) end
+TOOL.reset = function() Manipulator.resetTransform() end
+TOOL.undo = function() Manipulator.undo() end
+TOOL.redo = function() Manipulator.redo() end
+
+-- Mode/Axis
+TOOL.setMode = function(m) Manipulator.setMode(m) end
+TOOL.setAxis = function(a) Manipulator.setAxis(a) end
+
+-- Transform getters
+TOOL.getPosition = function() return Manipulator.getPosition() end
+TOOL.getRotation = function() return Manipulator.getRotation() end
+TOOL.getScale = function() return Manipulator.getScale() end
+
+-- Macros
+TOOL.startMacro = function(name) return Macros.startRecording(name) end
+TOOL.stopMacro = function() return Macros.stopRecording() end
+TOOL.playMacro = function(name) return Macros.play(name, Manipulator) end
+TOOL.listMacros = function() return Macros.list() end
+
+-- Presets
+TOOL.presets = {}
+TOOL.presets.faceNorth = function()
+    if not Manipulator.hasSelection() then return end
+    local rot = Manipulator.getRotation()
+    Manipulator.rotateTo(0, 0, rot and rot.roll or 0)
+end
+TOOL.presets.faceSouth = function()
+    if not Manipulator.hasSelection() then return end
+    local rot = Manipulator.getRotation()
+    Manipulator.rotateTo(0, 180, rot and rot.roll or 0)
+end
+TOOL.presets.resetTransform = function()
+    Manipulator.resetTransform()
+end
+TOOL.presets.nudge = function(amount, direction)
+    if not Manipulator.hasSelection() then return end
+    amount = amount or 0.5
+    direction = direction or "up"
+    local deltas = {
+        up      = {0, 0, amount},
+        down    = {0, 0, -amount},
+        left    = {-amount, 0, 0},
+        right   = {amount, 0, 0},
+        forward = {0, amount, 0},
+        back    = {0, -amount, 0},
+    }
+    local d = deltas[direction]
+    if d then Manipulator.move(d[1], d[2], d[3]) end
+end
+
+TOOL.log = function(msg)
+    print("[InZoi TOOL] " .. tostring(msg) .. "\n")
+end
+
+-- ============================================================================
+-- Done
+-- ============================================================================
+
+print(string.format("[%s] T.O.O.L. loaded successfully!\n", ModName))
+print(string.format("[%s] Press F2 to toggle the tool overlay.\n", ModName))
+print(string.format("[%s] Use TOOL.selectByClass('ClassName') from console to select objects.\n", ModName))
+print(string.format("[%s] Type TOOL.log('hello') to test the API.\n", ModName))
