@@ -14,23 +14,19 @@ Advanced object manipulation mod for **inZOI**, inspired by [TwistedMexi's T.O.O
 - **Off-Lot Placement** — Place objects anywhere, beyond normal lot boundaries
 
 ### Precision Controls
-- **Coordinate Input** — Enter exact values via the numeric input panel (N key)
+- **Coordinate Input** — Enter exact values via console commands
 - **Grid Snapping** — Optional snap increments for movement, rotation, and scale
 - **Axis Constraints** — Lock manipulation to a single axis (X/Y/Z) or plane (XY/XZ/YZ)
 
 ### User Interface
-- **ImGui Overlay** — Full HUD showing mode, axis, object info, and transform values
+- **Console Commands** — Full TOOL API accessible from the UE4SS console
 - **Actor Browser** — Search and select any actor by class name
-- **Settings Panel** — Configure all settings in-game with live sliders
-- **Macro Panel** — Record, play, and manage manipulation macros
+- **Visual GUI** — Optional ImGui overlay via the C++ companion mod (see below)
+- **Persistent Settings** — Preferences saved to JSON and restored on load
 
 ### Quality of Life
 - **Full Undo/Redo** — Up to 100 levels of undo history (configurable)
 - **Reset to Original** — Restore any object to its original transform with Delete key
-- **Persistent Settings** — Preferences saved to JSON and restored on load
-
-### Extensibility
-- **Global TOOL API** — Full API available from the UE4SS console
 - **Macro System** — Record, save, and replay sequences of operations
 - **Presets** — Built-in presets (face north/south, nudge, reset)
 
@@ -55,22 +51,39 @@ Advanced object manipulation mod for **inZOI**, inspired by [TwistedMexi's T.O.O
 
 ### Step 3: Install T.O.O.L.
 1. Download or clone this repository
-2. Copy the `UE4SS/Mods/InZoiTOOL` folder into:
+2. Copy `UE4SS/Mods/InZoiTOOL/` into your UE4SS Mods directory:
    ```
    <inZOI>/BlueClient/Binaries/Win64/ue4ss/Mods/InZoiTOOL/
    ```
-3. Verify the folder contains: `main.lua`, `enabled.txt`, `settings.lua`, `manipulator.lua`, `macros.lua`, `ui.lua`
+3. Add this line to `ue4ss/Mods/mods.txt`:
+   ```
+   InZoiTOOL : 1
+   ```
+4. Verify the `scripts/` subfolder contains: `main.lua`, `settings.lua`, `manipulator.lua`, `macros.lua`, `ui.lua`
 
 ### Step 4: Launch
 1. Start inZOI — UE4SS loads automatically
-2. Press **F2** in-game to toggle the T.O.O.L. overlay
-3. Use the **Actor Browser** in the overlay to find and select objects
+2. Open the UE4SS console (` ~ ` key by default)
+3. Press **F2** to toggle T.O.O.L. on
+4. Use `TOOL.help()` in the console for the full command list
+
+## Optional: Visual GUI Overlay
+
+The Lua mod works entirely through keyboard shortcuts and the UE4SS console. For a visual ImGui overlay tab inside the UE4SS window, install the **InZoiTOOL_GUI** companion mod:
+
+1. Build the C++ companion mod from `UE4SS/Mods/InZoiTOOL_GUI/dlls/main.cpp` (requires the UE4SS C++ mod SDK)
+2. Place the compiled `main.dll` in `ue4ss/Mods/InZoiTOOL_GUI/dlls/`
+3. Add `InZoiTOOL_GUI : 1` to `mods.txt`
+4. A "T.O.O.L." tab will appear in the UE4SS debug window with full visual controls
+
+See the [UE4SS C++ Mod Guide](https://docs.ue4ss.com/guides/creating-a-c++-mod.html) for build instructions.
 
 ## Keybindings
 
 | Key | Action |
 |-----|--------|
 | `F2` | Toggle TOOL on/off |
+| `F3` | Print status to console |
 | `G` | Move mode |
 | `R` | Rotate mode |
 | `S` | Scale mode |
@@ -79,7 +92,6 @@ Advanced object manipulation mod for **inZOI**, inspired by [TwistedMexi's T.O.O
 | `Tab` | Cycle through axes |
 | `Arrow Keys` | Nudge object (direction depends on mode) |
 | `Page Up/Down` | Elevate up/down |
-| `N` | Open numeric coordinate input |
 | `Ctrl+Z` | Undo |
 | `Ctrl+Y` | Redo |
 | `Delete` | Reset object to original transform |
@@ -87,15 +99,18 @@ Advanced object manipulation mod for **inZOI**, inspired by [TwistedMexi's T.O.O
 
 ## Console API
 
-Open the UE4SS console (`~` key by default) to use the TOOL API directly:
+Open the UE4SS console (`~` key by default) to use the TOOL API:
 
 ```lua
--- Select an actor by class name
-TOOL.selectByClass("BP_Furniture_C")
+-- Browse and select objects
+TOOL.browseActors("Actor")           -- List actors by class
+TOOL.browseActors("StaticMeshActor") -- More specific class
+TOOL.selectFromBrowse(3)             -- Select #3 from results
+TOOL.selectByClass("BP_Furniture_C") -- Select first of class
 
--- Move the selected object
+-- Move
 TOOL.move(10, 0, 0)        -- Move +10 on X axis
-TOOL.moveTo(100, 200, 50)  -- Move to absolute position
+TOOL.moveTo(100, 200, 50)  -- Absolute position
 
 -- Rotate
 TOOL.rotate(0, 45, 0)      -- Rotate 45 degrees yaw
@@ -103,23 +118,25 @@ TOOL.rotateTo(0, 0, 0)     -- Reset rotation
 
 -- Scale
 TOOL.scale(1.5)             -- Scale to 150%
-TOOL.scaleTo(2, 2, 2)      -- Set absolute scale
+TOOL.scaleTo(2, 2, 2)      -- Absolute scale
 
 -- Elevate
 TOOL.elevate(10)            -- Raise by 10 units
-TOOL.elevateTo(100)         -- Set absolute height
+TOOL.elevateTo(100)         -- Absolute height
 
--- Undo/Redo
-TOOL.undo()
-TOOL.redo()
-TOOL.reset()                -- Reset to original transform
+-- Utilities
+TOOL.undo()                 -- Undo last change
+TOOL.redo()                 -- Redo
+TOOL.reset()                -- Reset to original
+TOOL.status()               -- Print current state
+TOOL.help()                 -- Full help
 
 -- Macros
 TOOL.startMacro("myMacro")
 TOOL.move(5, 0, 0)
 TOOL.rotate(0, 90, 0)
 TOOL.stopMacro()
-TOOL.playMacro("myMacro")  -- Replay the sequence
+TOOL.playMacro("myMacro")
 
 -- Presets
 TOOL.presets.faceNorth()
@@ -129,49 +146,56 @@ TOOL.presets.nudge(1, "up")
 
 ## Configuration
 
-Edit `tool_settings.json` in the mod folder, or use the in-game Settings panel (click the "Settings" header in the overlay).
+Edit `scripts/tool_settings.json` in the mod folder or modify in-game via console.
 
 Key settings:
-- `moveGridSnap` — Set to `0` for free movement, or a value like `0.25` for grid snapping
-- `rotateGridSnap` — Set to `0` for free rotation, or `15` for 15-degree snaps
-- `minScale` / `maxScale` — Limit how small/large objects can be scaled
+- `moveGridSnap` — `0` for free movement, or `0.25` for grid snapping
+- `rotateGridSnap` — `0` for free rotation, or `15` for 15-degree snaps
+- `minScale` / `maxScale` — Scale limits
 - `elevationStep` — How much Page Up/Down moves per press
+- `moveSpeed` — Arrow key nudge amount
 
 ## Project Structure
 
 ```
-InZoiTOOL/
-├── UE4SS/Mods/InZoiTOOL/
-│   ├── main.lua              # Entry point - keybindings, global API, initialization
-│   ├── enabled.txt           # UE4SS mod enabler flag
-│   ├── manipulator.lua       # Core object manipulation (move/rotate/scale/elevate)
-│   ├── ui.lua                # ImGui overlay (HUD, actor browser, settings panel)
-│   ├── settings.lua          # Persistent JSON settings
-│   ├── macros.lua            # Macro record/playback system
-│   └── tool_settings.json    # Default settings file
-└── README.md
+UE4SS/Mods/
+├── mods.txt                          # Add "InZoiTOOL : 1" here
+├── InZoiTOOL/                        # Main Lua mod
+│   └── scripts/
+│       ├── main.lua                  # Entry point, keybindings, TOOL API
+│       ├── manipulator.lua           # Object manipulation (move/rotate/scale)
+│       ├── ui.lua                    # Console output + shared var sync
+│       ├── settings.lua              # Persistent JSON settings
+│       ├── macros.lua                # Macro record/playback
+│       └── tool_settings.json        # Default settings
+└── InZoiTOOL_GUI/                    # Optional C++ companion (ImGui)
+    └── dlls/
+        ├── main.cpp                  # ImGui tab source
+        ├── CMakeLists.txt            # Build config
+        └── main.dll                  # Compiled (you build this)
 ```
 
 ## How It Works
 
-Unlike the official ModKit (which only supports asset mods), T.O.O.L. uses **UE4SS** — a community-created runtime that injects into inZOI's process and exposes Unreal Engine's reflection system to Lua scripts. This gives access to:
+T.O.O.L. uses **UE4SS** — a community runtime that injects into inZOI and exposes Unreal Engine's reflection system to Lua. This gives access to:
 
 - **Actor discovery** via `FindFirstOf()` / `FindAllOf()`
 - **Transform manipulation** via `K2_SetActorLocation()`, `K2_SetActorRotation()`, `SetActorScale3D()`
 - **Keyboard input** via `RegisterKeyBind()`
-- **GUI rendering** via UE4SS's built-in ImGui integration
+- **State synchronization** via `SetSharedVariable()` / `GetSharedVariable()` for the GUI companion
 
-This is the same approach used by other advanced inZOI mods like the Mod Menu.
+The optional C++ companion mod registers an ImGui tab in the UE4SS window and reads shared variables to display a visual overlay with clickable buttons.
 
 ## Known Limitations
 
-- **No mouse click selection** — UE4SS Lua doesn't expose line trace / raycast APIs, so you must select objects through the Actor Browser or console. This may improve as UE4SS and inZOI modding evolve.
-- **Game may fight placement** — inZOI's build system may have its own placement validation that resets objects. If an object snaps back, try moving it during live mode (not build mode).
-- **Official Lua scripting (Dec 2026)** — KRAFTON plans to add official Lua scripting support. When available, T.O.O.L. may be updated to use the official API.
+- **No mouse click selection** — UE4SS Lua doesn't easily expose line trace APIs, so object selection is through the console Actor Browser (`TOOL.browseActors()`).
+- **Game may fight placement** — inZOI's build system may validate placement and reset objects. Try manipulating during live mode (not build mode).
+- **GUI requires C++ companion** — UE4SS Lua mods don't have direct ImGui access. The visual overlay needs the companion mod compiled from source.
+- **Official Lua scripting (Dec 2026)** — KRAFTON plans official Lua support. T.O.O.L. may be updated to use the official API when available.
 
 ## License
 
-This project is open source. Free to use, modify, and distribute for non-commercial purposes.
+Open source. Free to use, modify, and distribute for non-commercial purposes.
 
 ## Credits
 

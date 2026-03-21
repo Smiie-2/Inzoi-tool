@@ -50,8 +50,8 @@ end
 local function setActorLocation(actor, loc)
     if not actor or not actor:IsValid() then return end
     local vec = {X = loc.x, Y = loc.y, Z = loc.z}
-    -- K2_SetActorLocation(NewLocation, bSweep, bTeleport)
-    actor:K2_SetActorLocation(vec, false, true)
+    -- K2_SetActorLocation(NewLocation, bSweep, SweepHitResult, bTeleport)
+    actor:K2_SetActorLocation(vec, false, {}, true)
 end
 
 local function getActorRotation(actor)

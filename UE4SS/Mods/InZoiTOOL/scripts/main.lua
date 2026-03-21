@@ -7,16 +7,20 @@
 --
 -- Requires: UE4SS (https://github.com/UE4SS-RE/RE-UE4SS)
 --           inZOI Mod Enabler (Nexus Mods)
+--
+-- Optional: InZoiTOOL_GUI C++ companion mod for ImGui visual overlay
 -- ============================================================================
 
 local ModName = "InZoiTOOL"
 print(string.format("[%s] Loading T.O.O.L. - Takes Objects Off Lot...\n", ModName))
 
 -- Resolve mod directory for file I/O
-local modDir = UEHelpers and UEHelpers.GetCurrentModPath and UEHelpers.GetCurrentModPath()
+local modDir = nil
+if ModRef and ModRef.GetModPath then
+    modDir = ModRef:GetModPath()
+end
 if not modDir then
-    -- Fallback: construct path from known UE4SS mod layout
-    modDir = ".\\ue4ss\\Mods\\" .. ModName
+    modDir = ".\\ue4ss\\Mods\\" .. ModName .. "\\scripts"
 end
 
 -- Load modules
@@ -42,20 +46,31 @@ local function toggleTool()
     toolActive = not toolActive
     UI.visible = toolActive
     if toolActive then
-        print("[InZoi TOOL] Activated\n")
-        UI.setStatus("T.O.O.L. activated - select an object to begin")
+        print("[InZoi TOOL] === ACTIVATED ===\n")
+        print("[InZoi TOOL] Mode: MOVE | Axis: FREE\n")
+        print("[InZoi TOOL] Use TOOL.selectByClass('ClassName') to select an object\n")
+        print("[InZoi TOOL] Or TOOL.browseActors('Actor') to browse\n")
+        print("[InZoi TOOL] Type TOOL.help() for full command list\n")
+        UI.setStatus("T.O.O.L. activated")
     else
-        print("[InZoi TOOL] Deactivated\n")
+        print("[InZoi TOOL] === DEACTIVATED ===\n")
+        UI.setStatus("T.O.O.L. deactivated")
     end
 end
 
 -- ============================================================================
--- Keybindings
+-- Keybindings (UE4SS RegisterKeyBind API)
 -- ============================================================================
 
 -- F2: Toggle tool
 RegisterKeyBind(Key.F2, function()
     toggleTool()
+end)
+
+-- F3: Print status
+RegisterKeyBind(Key.F3, function()
+    if not toolActive then return end
+    UI.printStatus()
 end)
 
 -- Mode keys (only when tool is active)
@@ -108,7 +123,7 @@ RegisterKeyBind(Key.TAB, function()
     UI.setStatus("Axis: " .. Manipulator.getAxisDisplayName())
 end)
 
--- Undo/Redo
+-- Undo/Redo (with modifier keys)
 RegisterKeyBind(Key.Z, {ModifierKey.CONTROL}, function()
     if not toolActive then return end
     Manipulator.undo()
@@ -119,12 +134,6 @@ RegisterKeyBind(Key.Y, {ModifierKey.CONTROL}, function()
     if not toolActive then return end
     Manipulator.redo()
     UI.setStatus("Redo")
-end)
-
--- Numeric input
-RegisterKeyBind(Key.N, function()
-    if not toolActive then return end
-    UI.showCoordinateInput = not UI.showCoordinateInput
 end)
 
 -- Reset transform
@@ -141,14 +150,8 @@ RegisterKeyBind(Key.ESCAPE, function()
     UI.setStatus("Deselected")
 end)
 
--- ============================================================================
--- Scroll wheel for fine adjustments
--- We use LoopAsync to poll for scroll state since UE4SS doesn't have
--- a direct scroll event. Instead, we handle this through the ImGui UI.
--- ============================================================================
-
--- Movement nudge keys (arrow keys with shift for fine control)
-RegisterKeyBind(Key.UP, function()
+-- Arrow keys for nudging
+RegisterKeyBind(Key.UP_ARROW, function()
     if not toolActive or not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
@@ -162,7 +165,7 @@ RegisterKeyBind(Key.UP, function()
     end
 end)
 
-RegisterKeyBind(Key.DOWN, function()
+RegisterKeyBind(Key.DOWN_ARROW, function()
     if not toolActive or not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
@@ -176,7 +179,7 @@ RegisterKeyBind(Key.DOWN, function()
     end
 end)
 
-RegisterKeyBind(Key.LEFT, function()
+RegisterKeyBind(Key.LEFT_ARROW, function()
     if not toolActive or not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
@@ -186,7 +189,7 @@ RegisterKeyBind(Key.LEFT, function()
     end
 end)
 
-RegisterKeyBind(Key.RIGHT, function()
+RegisterKeyBind(Key.RIGHT_ARROW, function()
     if not toolActive or not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
@@ -208,31 +211,52 @@ RegisterKeyBind(Key.PAGE_DOWN, function()
 end)
 
 -- ============================================================================
--- ImGui draw callback for the overlay UI
+-- Periodic sync: push state to shared variables for C++ GUI companion
+-- Also poll for commands from the GUI
 -- ============================================================================
 
-RegisterDrawCallback(function()
-    UI.draw()
+LoopAsync(200, function()
+    -- Sync state for GUI companion
+    UI.syncSharedState(toolActive)
+
+    -- Poll for commands from GUI companion
+    local cmd = UI.pollCommands()
+    if cmd == "toggle" then
+        toggleTool()
+    end
+
+    return false -- keep looping (return true to stop)
 end)
 
 -- ============================================================================
--- Global TOOL API (for console and other mods to use)
+-- Global TOOL API (for UE4SS console and other mods)
 -- ============================================================================
 
 TOOL = {}
 
 TOOL.toggle = toggleTool
 TOOL.isActive = function() return toolActive end
+TOOL.status = function() UI.printStatus() end
+TOOL.help = function() UI.printHelp() end
 
 -- Selection
 TOOL.selectByClass = function(className)
     local actor = FindFirstOf(className)
     if actor and actor:IsValid() then
         Manipulator.selectActor(actor)
+        UI.printStatus()
         return true
     end
     print("[InZoi TOOL] No instance of '" .. className .. "' found\n")
     return false
+end
+
+TOOL.browseActors = function(className, maxResults)
+    UI.browseActors(className, maxResults)
+end
+
+TOOL.selectFromBrowse = function(index)
+    return UI.selectFromBrowse(index)
 end
 
 TOOL.deselect = function() Manipulator.deselect() end
@@ -307,6 +331,6 @@ end
 -- ============================================================================
 
 print(string.format("[%s] T.O.O.L. loaded successfully!\n", ModName))
-print(string.format("[%s] Press F2 to toggle the tool overlay.\n", ModName))
-print(string.format("[%s] Use TOOL.selectByClass('ClassName') from console to select objects.\n", ModName))
-print(string.format("[%s] Type TOOL.log('hello') to test the API.\n", ModName))
+print(string.format("[%s] Press F2 to activate, F3 for status.\n", ModName))
+print(string.format("[%s] Type TOOL.help() for full command list.\n", ModName))
+print(string.format("[%s] GUI: Install InZoiTOOL_GUI companion mod for visual overlay.\n", ModName))
