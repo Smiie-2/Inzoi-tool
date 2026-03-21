@@ -51,13 +51,16 @@ public:
 
     ~InZoiTOOL_GUI() override = default;
 
-    auto on_program_start() -> void override
-    {
-        // Register our ImGui tab in the UE4SS debug window
-        register_tab(STR("T.O.O.L."), [this](){ render_tab(); });
-    }
+    auto on_program_start() -> void override {}
 
     auto on_unreal_init() -> void override {}
+
+    // Register ImGui tab here (not in constructor/on_program_start) to avoid
+    // race condition crash. See: https://github.com/UE4SS-RE/RE-UE4SS/issues/481
+    auto on_ui_init() -> void override
+    {
+        register_tab(STR("T.O.O.L."), [this](){ render_tab(); });
+    }
 
 private:
     // Buffers for ImGui input

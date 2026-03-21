@@ -28,6 +28,7 @@ local Settings = require("settings")
 local Manipulator = require("manipulator")
 local Macros = require("macros")
 local UI = require("ui")
+local Overlay = require("overlay")
 
 -- Initialize settings
 Settings.init(modDir)
@@ -35,12 +36,15 @@ Settings.init(modDir)
 -- Wire up module references
 UI.manipulator = Manipulator
 UI.macros = Macros
+Overlay.manipulator = Manipulator
 
 -- ============================================================================
 -- Tool State
 -- ============================================================================
 
 local toolActive = false
+
+local overlayAvailable = false
 
 local function toggleTool()
     toolActive = not toolActive
@@ -52,9 +56,24 @@ local function toggleTool()
         print("[InZoi TOOL] Or TOOL.browseActors('Actor') to browse\n")
         print("[InZoi TOOL] Type TOOL.help() for full command list\n")
         UI.setStatus("T.O.O.L. activated")
+
+        -- Try to show in-game UMG overlay
+        if Overlay.show() then
+            overlayAvailable = true
+            Overlay.setStatus("T.O.O.L. activated")
+        end
     else
         print("[InZoi TOOL] === DEACTIVATED ===\n")
         UI.setStatus("T.O.O.L. deactivated")
+        Overlay.hide()
+    end
+end
+
+-- Helper: send status to both console and overlay
+local function setStatus(msg)
+    UI.setStatus(msg)
+    if overlayAvailable then
+        Overlay.setStatus(msg)
     end
 end
 
@@ -77,77 +96,77 @@ end)
 RegisterKeyBind(Key.G, function()
     if not toolActive then return end
     Manipulator.setMode("move")
-    UI.setStatus("Mode: MOVE")
+    setStatus("Mode: MOVE")
 end)
 
 RegisterKeyBind(Key.R, function()
     if not toolActive then return end
     Manipulator.setMode("rotate")
-    UI.setStatus("Mode: ROTATE")
+    setStatus("Mode: ROTATE")
 end)
 
 RegisterKeyBind(Key.S, function()
     if not toolActive then return end
     Manipulator.setMode("scale")
-    UI.setStatus("Mode: SCALE")
+    setStatus("Mode: SCALE")
 end)
 
 RegisterKeyBind(Key.E, function()
     if not toolActive then return end
     Manipulator.setMode("elevate")
-    UI.setStatus("Mode: ELEVATE")
+    setStatus("Mode: ELEVATE")
 end)
 
 -- Axis keys
 RegisterKeyBind(Key.X, function()
     if not toolActive then return end
     Manipulator.setAxis("x")
-    UI.setStatus("Axis: X")
+    setStatus("Axis: X")
 end)
 
 RegisterKeyBind(Key.Y, function()
     if not toolActive then return end
     Manipulator.setAxis("y")
-    UI.setStatus("Axis: Y")
+    setStatus("Axis: Y")
 end)
 
 RegisterKeyBind(Key.Z, function()
     if not toolActive then return end
     Manipulator.setAxis("z")
-    UI.setStatus("Axis: Z")
+    setStatus("Axis: Z")
 end)
 
 RegisterKeyBind(Key.TAB, function()
     if not toolActive then return end
     Manipulator.cycleAxis()
-    UI.setStatus("Axis: " .. Manipulator.getAxisDisplayName())
+    setStatus("Axis: " .. Manipulator.getAxisDisplayName())
 end)
 
 -- Undo/Redo (with modifier keys)
 RegisterKeyBind(Key.Z, {ModifierKey.CONTROL}, function()
     if not toolActive then return end
     Manipulator.undo()
-    UI.setStatus("Undo")
+    setStatus("Undo")
 end)
 
 RegisterKeyBind(Key.Y, {ModifierKey.CONTROL}, function()
     if not toolActive then return end
     Manipulator.redo()
-    UI.setStatus("Redo")
+    setStatus("Redo")
 end)
 
 -- Reset transform
 RegisterKeyBind(Key.DELETE, function()
     if not toolActive then return end
     Manipulator.resetTransform()
-    UI.setStatus("Transform reset")
+    setStatus("Transform reset")
 end)
 
 -- Deselect
 RegisterKeyBind(Key.ESCAPE, function()
     if not toolActive then return end
     Manipulator.deselect()
-    UI.setStatus("Deselected")
+    setStatus("Deselected")
 end)
 
 -- Arrow keys for nudging
@@ -216,13 +235,20 @@ end)
 -- ============================================================================
 
 LoopAsync(200, function()
-    -- Sync state for GUI companion
+    -- Sync state for C++ ImGui companion (shared variables)
     UI.syncSharedState(toolActive)
 
-    -- Poll for commands from GUI companion
+    -- Poll for commands from C++ GUI companion
     local cmd = UI.pollCommands()
     if cmd == "toggle" then
         toggleTool()
+    end
+
+    -- Update in-game UMG overlay (if active and created)
+    if toolActive and overlayAvailable then
+        ExecuteInGameThread(function()
+            Overlay.update()
+        end)
     end
 
     return false -- keep looping (return true to stop)
