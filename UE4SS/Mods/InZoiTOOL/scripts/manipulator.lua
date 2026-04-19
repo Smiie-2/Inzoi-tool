@@ -7,6 +7,14 @@ local Settings = require("settings")
 
 local Manipulator = {}
 
+-- Cross-module ref injected by main.lua (avoids circular require of macros.lua).
+Manipulator.macros = nil
+
+local function recordStep(funcName, ...)
+    local m = Manipulator.macros
+    if m and m.recordStep then m.recordStep(funcName, ...) end
+end
+
 -- State
 Manipulator.selectedActor = nil
 Manipulator.selectedActorName = ""
@@ -188,6 +196,18 @@ end
 function Manipulator.selectActor(actor)
     if not actor or not actor:IsValid() then return end
 
+    -- Force the actor's root component (and any child primitive component)
+    -- to Movable mobility so K2_SetActorLocation / K2_SetActorRotation take
+    -- effect. Level-placed StaticMeshActors in shipping builds are
+    -- typically Static (Mobility = 0), which makes move/rotate/elevate
+    -- silent no-ops while scale still works. EComponentMobility::Movable = 2.
+    pcall(function()
+        local root = actor.RootComponent
+        if root and root.IsValid and root:IsValid() and root.SetMobility then
+            root:SetMobility(2)
+        end
+    end)
+
     Manipulator.selectedActor = actor
     Manipulator.selectedActorName = actor:GetFullName()
     Manipulator.undoStack = {}
@@ -221,6 +241,8 @@ end
 function Manipulator.move(dx, dy, dz)
     if not Manipulator.hasSelection() then return end
 
+    recordStep("move", dx, dy, dz)
+
     dx, dy, dz = applyMoveSnap(dx, dy, dz)
 
     -- Apply axis constraints
@@ -244,6 +266,7 @@ end
 
 function Manipulator.moveTo(x, y, z)
     if not Manipulator.hasSelection() then return end
+    recordStep("moveTo", x, y, z)
     Manipulator.pushUndo()
     setActorLocation(Manipulator.selectedActor, {x = x, y = y, z = z})
 end
@@ -255,13 +278,19 @@ end
 function Manipulator.rotate(dp, dy, dr)
     if not Manipulator.hasSelection() then return end
 
+    recordStep("rotate", dp, dy, dr)
+
     dp, dy, dr = applyRotateSnap(dp, dy, dr)
 
-    -- Apply axis constraints
+    -- Apply axis constraints (single-axis zeros two components; compound-axis
+    -- zeros the third, mirroring Manipulator.move's convention).
     local axis = Manipulator.currentAxis
     if axis == "x" then dy = 0; dr = 0
     elseif axis == "y" then dp = 0; dr = 0
     elseif axis == "z" then dp = 0; dy = 0
+    elseif axis == "xy" then dr = 0
+    elseif axis == "xz" then dy = 0
+    elseif axis == "yz" then dp = 0
     end
 
     Manipulator.pushUndo()
@@ -275,6 +304,7 @@ end
 
 function Manipulator.rotateTo(pitch, yaw, roll)
     if not Manipulator.hasSelection() then return end
+    recordStep("rotateTo", pitch, yaw, roll)
     Manipulator.pushUndo()
     setActorRotation(Manipulator.selectedActor, {pitch = pitch, yaw = yaw, roll = roll})
 end
@@ -297,6 +327,7 @@ end
 function Manipulator.scaleUniform(factor)
     if not Manipulator.hasSelection() then return end
 
+    recordStep("scaleUniform", factor)
     Manipulator.pushUndo()
 
     local s = getActorScale(Manipulator.selectedActor)
@@ -312,6 +343,7 @@ end
 function Manipulator.scaleTo(x, y, z)
     if not Manipulator.hasSelection() then return end
 
+    recordStep("scaleTo", x, y, z)
     Manipulator.pushUndo()
 
     local minS = Settings.get("minScale") or 0.1
@@ -329,6 +361,7 @@ end
 
 function Manipulator.elevate(delta)
     if not Manipulator.hasSelection() then return end
+    recordStep("elevate", delta)
     Manipulator.pushUndo()
 
     local loc = getActorLocation(Manipulator.selectedActor)
@@ -338,6 +371,7 @@ end
 
 function Manipulator.elevateTo(height)
     if not Manipulator.hasSelection() then return end
+    recordStep("elevateTo", height)
     Manipulator.pushUndo()
 
     local loc = getActorLocation(Manipulator.selectedActor)

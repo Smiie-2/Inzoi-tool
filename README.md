@@ -47,7 +47,18 @@ Advanced object manipulation mod for **inZOI**, inspired by [TwistedMexi's T.O.O
 
 ### Step 2: Install UE4SS
 1. Download [UE4SS packaged for inZOI](https://www.nexusmods.com/inzoi/mods/243) from Nexus Mods
-2. Extract into `<inZOI>/BlueClient/Binaries/Win64/` (creates the `ue4ss` folder)
+2. Extract into `<inZOI>/BlueClient/Binaries/Win64/` — in current UE4SS releases the only file that lands in `Win64/` is the proxy DLL (`dwmapi.dll`); everything else (`UE4SS.dll`, `UE4SS-settings.ini`, `Mods/`) goes inside the auto-created `ue4ss/` subfolder:
+   ```
+   <inZOI>/BlueClient/Binaries/Win64/
+   ├── inZOI-Win64-Shipping.exe
+   ├── dwmapi.dll                 ← proxy DLL (only file that stays in Win64)
+   └── ue4ss/
+       ├── UE4SS.dll
+       ├── UE4SS-settings.ini
+       └── Mods/
+           └── mods.txt
+   ```
+   (Older installs with `UE4SS.dll` directly in `Win64/` still work — UE4SS keeps backwards compatibility — but new installs should follow the layout above.)
 
 ### Step 3: Install T.O.O.L.
 1. Download or clone this repository
@@ -59,7 +70,7 @@ Advanced object manipulation mod for **inZOI**, inspired by [TwistedMexi's T.O.O
    ```
    InZoiTOOL : 1
    ```
-4. Verify the `scripts/` subfolder contains: `main.lua`, `settings.lua`, `manipulator.lua`, `macros.lua`, `ui.lua`
+4. Verify the `scripts/` subfolder contains: `main.lua`, `settings.lua`, `manipulator.lua`, `macros.lua`, `ui.lua`, `overlay.lua`, `tool_settings.json`
 
 ### Step 4: Launch
 1. Start inZOI — UE4SS loads automatically
@@ -97,9 +108,28 @@ See the [UE4SS C++ Mod Guide](https://docs.ue4ss.com/guides/creating-a-c++-mod.h
 | `Delete` | Reset object to original transform |
 | `Escape` | Deselect |
 
+## Selecting an object (no console required)
+
+Press **F4** while T.O.O.L. is active. The overlay expands into a scrollable list of every `StaticMeshActor` in the level (F5 does the same for the broader `Actor` class). Navigate it entirely from the keyboard:
+
+| Key | Action |
+|-----|--------|
+| **Up / Down** | move highlight one row |
+| **Page Up / Page Down** | page the list (±10) |
+| **Left / Right** | jump to first / last entry |
+| **Enter** | confirm — select the highlighted actor |
+| **Escape** | cancel — close the list without selecting |
+
+Once you've confirmed a selection, all the mode + axis + arrow keys below operate on that actor.
+
 ## Console API
 
-Open the UE4SS console (`~` key by default) to use the TOOL API:
+Two alternative places to drive the TOOL API (if you'd rather type commands than use F4):
+
+- **The UE4SS GUI console** (Debugging Tools window → Console tab) — the full Lua API is available here. Availability of a typable input field varies by UE4SS build; if your version doesn't show one, use the in-game console below.
+- **inZOI's in-game console** (opened with `~`, `/`, or **F10** once `ConsoleEnablerMod` is enabled) — supports the subset shown under *In-game console command* below, dispatched via `RegisterConsoleCommandHandler`.
+
+### Lua API (UE4SS console)
 
 ```lua
 -- Browse and select objects
@@ -143,6 +173,31 @@ TOOL.presets.faceNorth()
 TOOL.presets.faceSouth()
 TOOL.presets.nudge(1, "up")
 ```
+
+### In-game console command (`tool ...`)
+
+After enabling `ConsoleEnablerMod`, open inZOI's own console (`~` / `/` / F10) and run:
+
+```
+tool help
+tool browse StaticMeshActor 20
+tool select 1
+tool move 0 0 100
+tool rotate 0 45 0
+tool scale 1.5
+tool elevate 50
+tool undo
+tool redo
+tool reset
+tool deselect
+tool mode rotate
+tool axis z
+tool pos
+tool rot
+tool sc
+```
+
+Arguments are space-separated; numeric args are parsed as numbers. Output is written back into the same console.
 
 ## Configuration
 

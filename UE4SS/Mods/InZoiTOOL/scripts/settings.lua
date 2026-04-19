@@ -7,9 +7,6 @@ local Settings = {}
 
 -- Default settings
 Settings.values = {
-    -- General
-    toggleKey = "F2",
-
     -- Movement
     moveGridSnap = 0.0,
     moveSpeed = 1.0,
