@@ -312,12 +312,46 @@ end
 -- ============================================================================
 
 local HIGHLIGHT_COLOR = {R = 1.0, G = 0.9, B = 0.4, A = 1.0}
-local DIM_COLOR       = {R = 0.7, G = 0.7, B = 0.7, A = 1.0}
+local DIM_COLOR       = {R = 0.8, G = 0.8, B = 0.8, A = 1.0}
+local HEADER_COLOR    = {R = 1.0, G = 0.7, B = 0.3, A = 1.0}
 
 local function truncateName(name, max)
     max = max or 55
     if #name > max then return "..." .. name:sub(-(max - 3)) end
     return name
+end
+
+-- Best-effort human-readable display name: prefer the static mesh asset
+-- name (e.g. "SM_Chair_Blue_01") over the internal actor id
+-- ("StaticMeshActor_342"). Falls through via pcall so an unexpected
+-- shape never crashes the browser.
+local function getDisplayName(actor)
+    local ok, mesh = pcall(function()
+        local smc = actor.StaticMeshComponent
+        if smc and smc.IsValid and smc:IsValid() then
+            local m = smc.StaticMesh
+            if m and m.IsValid and m:IsValid() then
+                return m:GetName()
+            end
+        end
+        return nil
+    end)
+    if ok and mesh and mesh ~= "" then return tostring(mesh) end
+
+    local ok2, n = pcall(function() return actor:GetName() end)
+    if ok2 and n and n ~= "" then return tostring(n) end
+
+    return actor:GetFullName()
+end
+
+local function getClassName(actor)
+    local ok, cls = pcall(function()
+        local c = actor:GetClass()
+        if c then return c:GetName() end
+        return nil
+    end)
+    if ok and cls and cls ~= "" then return tostring(cls) end
+    return "Unknown"
 end
 
 local function setColor(widget, color)
@@ -340,43 +374,63 @@ function Overlay.renderBrowser()
     local offset = Overlay.browserOffset
     local pageSize = Overlay.browserPageSize
 
+    -- Full hide path: collapse every widget, no string churn.
+    if not visible then
+        if browserHeader then browserHeader:SetVisibility(1) end
+        if browserHint then browserHint:SetVisibility(1) end
+        for i = 1, pageSize do
+            if browserRows[i] then browserRows[i]:SetVisibility(1) end
+        end
+        return
+    end
+
     if browserHeader then
-        if visible then
-            browserHeader:SetText(FText(string.format(
-                "Browse: %d / %d    (class: %s)",
-                idx, #items,
-                tostring(Overlay.browserClassName or ""))))
-            browserHeader:SetVisibility(0)
-        else
-            browserHeader:SetVisibility(1)
-        end
+        browserHeader:SetText(FText(string.format(
+            "Browse: %d / %d   (%s)",
+            idx, #items,
+            tostring(Overlay.browserClassName or ""))))
+        browserHeader:SetVisibility(0)
     end
+    if browserHint then browserHint:SetVisibility(0) end
 
-    if browserHint then
-        browserHint:SetVisibility(visible and 0 or 1)
-    end
+    -- The class of the item immediately before `offset+1` tells us whether
+    -- the first visible item's header is already "above the fold" and
+    -- should still be emitted on-screen (we always emit the header for
+    -- the first visible class, so the user sees the category even mid-list).
+    local slot = 1
+    local prevClass = nil
+    for i = offset + 1, #items do
+        if slot > pageSize then break end
+        local item = items[i]
+        if not item then break end
 
-    for i = 1, pageSize do
-        local tb = browserRows[i]
-        if tb then
-            if visible then
-                local itemIdx = offset + i
-                local item = items[itemIdx]
-                if item then
-                    local marker = (itemIdx == idx) and "> " or "  "
-                    tb:SetText(FText(string.format(
-                        "%s%d. %s",
-                        marker, itemIdx,
-                        truncateName(item.name or ""))))
-                    setColor(tb, (itemIdx == idx) and HIGHLIGHT_COLOR or DIM_COLOR)
-                    tb:SetVisibility(0)
-                else
-                    tb:SetVisibility(1)
-                end
-            else
-                tb:SetVisibility(1)
+        if item.className ~= prevClass then
+            local headerRow = browserRows[slot]
+            if headerRow then
+                headerRow:SetText(FText("== " .. tostring(item.className) .. " =="))
+                setColor(headerRow, HEADER_COLOR)
+                headerRow:SetVisibility(0)
             end
+            slot = slot + 1
+            prevClass = item.className
+            if slot > pageSize then break end
         end
+
+        local tb = browserRows[slot]
+        if tb then
+            local marker = (i == idx) and "> " or "  "
+            tb:SetText(FText(string.format(
+                "%s%d. %s",
+                marker, i, truncateName(item.name or ""))))
+            setColor(tb, (i == idx) and HIGHLIGHT_COLOR or DIM_COLOR)
+            tb:SetVisibility(0)
+        end
+        slot = slot + 1
+    end
+
+    -- Hide trailing unused row slots.
+    for i = slot, pageSize do
+        if browserRows[i] then browserRows[i]:SetVisibility(1) end
     end
 end
 
@@ -397,10 +451,24 @@ function Overlay.openBrowser(className, maxResults)
     local items = {}
     for _, a in ipairs(found) do
         if a and a.IsValid and a:IsValid() then
-            table.insert(items, {actor = a, name = a:GetFullName()})
+            table.insert(items, {
+                actor = a,
+                name = getDisplayName(a),
+                className = getClassName(a),
+            })
             if #items >= maxResults then break end
         end
     end
+
+    -- Group by class (category), then alphabetically by display name. The
+    -- renderer inserts a "== <className> ==" header row before each new
+    -- class so the list looks categorised.
+    table.sort(items, function(x, y)
+        if x.className == y.className then
+            return (x.name or "") < (y.name or "")
+        end
+        return x.className < y.className
+    end)
 
     if #items == 0 then
         print(string.format(

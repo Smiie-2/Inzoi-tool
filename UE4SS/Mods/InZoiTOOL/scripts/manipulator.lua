@@ -196,6 +196,18 @@ end
 function Manipulator.selectActor(actor)
     if not actor or not actor:IsValid() then return end
 
+    -- Force the actor's root component (and any child primitive component)
+    -- to Movable mobility so K2_SetActorLocation / K2_SetActorRotation take
+    -- effect. Level-placed StaticMeshActors in shipping builds are
+    -- typically Static (Mobility = 0), which makes move/rotate/elevate
+    -- silent no-ops while scale still works. EComponentMobility::Movable = 2.
+    pcall(function()
+        local root = actor.RootComponent
+        if root and root.IsValid and root:IsValid() and root.SetMobility then
+            root:SetMobility(2)
+        end
+    end)
+
     Manipulator.selectedActor = actor
     Manipulator.selectedActorName = actor:GetFullName()
     Manipulator.undoStack = {}
