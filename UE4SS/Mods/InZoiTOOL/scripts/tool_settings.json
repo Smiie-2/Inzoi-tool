@@ -1,4 +1,5 @@
 {
+    "activeAxisColor": [1.0, 1.0, 0.0, 1.0],
     "allowOffLot": true,
     "elevationStep": 0.5,
     "gizmoSize": 100.0,
@@ -11,5 +12,8 @@
     "rotateSpeed": 1.0,
     "scaleGridSnap": 0.0,
     "scaleSpeed": 1.0,
-    "snapToTerrain": false
+    "snapToTerrain": false,
+    "xAxisColor": [1.0, 0.2, 0.2, 1.0],
+    "yAxisColor": [0.2, 1.0, 0.2, 1.0],
+    "zAxisColor": [0.3, 0.4, 1.0, 1.0]
 }

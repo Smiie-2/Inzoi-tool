@@ -48,7 +48,24 @@ local function createWidget(className, outer, name)
         print(string.format("[InZoi TOOL] WARNING: UMG class '%s' not found\n", className))
         return nil
     end
-    return StaticConstructObject(class, outer, FName(name))
+    local obj = StaticConstructObject(class, outer, FName(name))
+    if not obj then
+        print(string.format(
+            "[InZoi TOOL] WARNING: StaticConstructObject failed for UMG class '%s' (name='%s')\n",
+            className, name))
+    end
+    return obj
+end
+
+local function createTextBlock(outer, name, text, color)
+    local tb = createWidget("TextBlock", outer, name)
+    if tb then
+        tb:SetText(FText(text))
+        if color then
+            tb:SetColorAndOpacity({SpecifiedColor = color, ColorUseRule = 0})
+        end
+    end
+    return tb
 end
 
 function Overlay.create()
@@ -90,7 +107,10 @@ function Overlay.create()
 
     -- Create canvas panel as root
     canvas = createWidget("CanvasPanel", widgetTree, "TOOLCanvas")
-    if not canvas then return false end
+    if not canvas then
+        print("[InZoi TOOL] Failed to create CanvasPanel - aborting overlay\n")
+        return false
+    end
     widgetTree.RootWidget = canvas
 
     -- Create background border
@@ -149,17 +169,6 @@ function Overlay.create()
 
     print("[InZoi TOOL] In-game overlay created!\n")
     return true
-end
-
-function createTextBlock(outer, name, text, color)
-    local tb = createWidget("TextBlock", outer, name)
-    if tb then
-        tb:SetText(FText(text))
-        if color then
-            tb:SetColorAndOpacity({SpecifiedColor = color, ColorUseRule = 0})
-        end
-    end
-    return tb
 end
 
 -- ============================================================================
