@@ -174,16 +174,51 @@ RegisterKeyBind(Key.DEL, function()
     setStatus("Transform reset")
 end)
 
--- Deselect
+-- Deselect (or close the in-overlay browser if it's open)
 RegisterKeyBind(Key.ESCAPE, function()
     if not toolActive then return end
+    if Overlay.browserVisible then
+        Overlay.closeBrowser()
+        setStatus("Browse canceled")
+        return
+    end
     Manipulator.deselect()
     setStatus("Deselected")
 end)
 
--- Arrow keys for nudging
+-- Browser: F4 = StaticMeshActor list, F5 = any Actor list.
+-- While the browser is open, arrows navigate the list (see arrow-key
+-- handlers below) and Enter confirms.
+RegisterKeyBind(Key.F4, function()
+    if not toolActive then return end
+    if Overlay.openBrowser then
+        Overlay.openBrowser("StaticMeshActor", 50)
+    end
+end)
+
+RegisterKeyBind(Key.F5, function()
+    if not toolActive then return end
+    if Overlay.openBrowser then
+        Overlay.openBrowser("Actor", 50)
+    end
+end)
+
+-- Enter confirms browser selection when the list is open.
+RegisterKeyBind(Key.RETURN, function()
+    if not toolActive then return end
+    if Overlay.browserVisible and Overlay.browserConfirm then
+        Overlay.browserConfirm()
+        setStatus("Selected via browser")
+    end
+end)
+
+-- Arrow keys: browser navigation when list is open, otherwise nudge
 RegisterKeyBind(Key.UP_ARROW, function()
-    if not toolActive or not Manipulator.hasSelection() then return end
+    if not toolActive then return end
+    if Overlay.browserVisible then
+        Overlay.browserMove(-1); return
+    end
+    if not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
         Manipulator.move(speed, 0, 0)
@@ -197,7 +232,11 @@ RegisterKeyBind(Key.UP_ARROW, function()
 end)
 
 RegisterKeyBind(Key.DOWN_ARROW, function()
-    if not toolActive or not Manipulator.hasSelection() then return end
+    if not toolActive then return end
+    if Overlay.browserVisible then
+        Overlay.browserMove(1); return
+    end
+    if not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
         Manipulator.move(-speed, 0, 0)
@@ -211,7 +250,12 @@ RegisterKeyBind(Key.DOWN_ARROW, function()
 end)
 
 RegisterKeyBind(Key.LEFT_ARROW, function()
-    if not toolActive or not Manipulator.hasSelection() then return end
+    if not toolActive then return end
+    if Overlay.browserVisible then
+        -- Left arrow in browser jumps to the first entry
+        Overlay.browserMove(-(#Overlay.browserItems + 1)); return
+    end
+    if not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
         Manipulator.move(0, -speed, 0)
@@ -221,7 +265,12 @@ RegisterKeyBind(Key.LEFT_ARROW, function()
 end)
 
 RegisterKeyBind(Key.RIGHT_ARROW, function()
-    if not toolActive or not Manipulator.hasSelection() then return end
+    if not toolActive then return end
+    if Overlay.browserVisible then
+        -- Right arrow in browser jumps to the last entry
+        Overlay.browserMove(#Overlay.browserItems + 1); return
+    end
+    if not Manipulator.hasSelection() then return end
     local speed = Settings.get("moveSpeed") or 1.0
     if Manipulator.currentMode == "move" then
         Manipulator.move(0, speed, 0)
@@ -230,14 +279,22 @@ RegisterKeyBind(Key.RIGHT_ARROW, function()
     end
 end)
 
--- Page Up / Page Down for elevation
+-- Page Up / Page Down: browser page-jump when list is open, else elevation
 RegisterKeyBind(Key.PAGE_UP, function()
-    if not toolActive or not Manipulator.hasSelection() then return end
+    if not toolActive then return end
+    if Overlay.browserVisible then
+        Overlay.browserMove(-(Overlay.browserPageSize or 10)); return
+    end
+    if not Manipulator.hasSelection() then return end
     Manipulator.elevate(Settings.get("elevationStep") or 0.5)
 end)
 
 RegisterKeyBind(Key.PAGE_DOWN, function()
-    if not toolActive or not Manipulator.hasSelection() then return end
+    if not toolActive then return end
+    if Overlay.browserVisible then
+        Overlay.browserMove(Overlay.browserPageSize or 10); return
+    end
+    if not Manipulator.hasSelection() then return end
     Manipulator.elevate(-(Settings.get("elevationStep") or 0.5))
 end)
 

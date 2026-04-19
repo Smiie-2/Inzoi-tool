@@ -108,9 +108,23 @@ See the [UE4SS C++ Mod Guide](https://docs.ue4ss.com/guides/creating-a-c++-mod.h
 | `Delete` | Reset object to original transform |
 | `Escape` | Deselect |
 
+## Selecting an object (no console required)
+
+Press **F4** while T.O.O.L. is active. The overlay expands into a scrollable list of every `StaticMeshActor` in the level (F5 does the same for the broader `Actor` class). Navigate it entirely from the keyboard:
+
+| Key | Action |
+|-----|--------|
+| **Up / Down** | move highlight one row |
+| **Page Up / Page Down** | page the list (±10) |
+| **Left / Right** | jump to first / last entry |
+| **Enter** | confirm — select the highlighted actor |
+| **Escape** | cancel — close the list without selecting |
+
+Once you've confirmed a selection, all the mode + axis + arrow keys below operate on that actor.
+
 ## Console API
 
-Two places to drive the TOOL API:
+Two alternative places to drive the TOOL API (if you'd rather type commands than use F4):
 
 - **The UE4SS GUI console** (Debugging Tools window → Console tab) — the full Lua API is available here. Availability of a typable input field varies by UE4SS build; if your version doesn't show one, use the in-game console below.
 - **inZOI's in-game console** (opened with `~`, `/`, or **F10** once `ConsoleEnablerMod` is enabled) — supports the subset shown under *In-game console command* below, dispatched via `RegisterConsoleCommandHandler`.

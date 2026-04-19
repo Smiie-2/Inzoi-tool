@@ -14,6 +14,13 @@ Overlay.widget = nil
 Overlay.isCreated = false
 Overlay.isVisible = false
 
+-- Browser (in-overlay actor selection list)
+Overlay.browserVisible = false
+Overlay.browserItems = {}          -- list of {actor, name}
+Overlay.browserIndex = 1           -- 1-based, index into browserItems
+Overlay.browserOffset = 0          -- 0-based, index of first visible row
+Overlay.browserPageSize = 10       -- rows rendered on screen at once
+
 -- Widget references
 local rootWidget = nil
 local widgetTree = nil
@@ -29,6 +36,9 @@ local scaleText = nil
 local statusText = nil
 local undoRedoText = nil
 local helpText = nil
+local browserHeader = nil
+local browserRows = {}             -- #browserPageSize TextBlocks
+local browserHint = nil
 
 -- References set by main.lua
 Overlay.manipulator = nil
@@ -134,16 +144,44 @@ function Overlay.create()
     scaleText = createTextBlock(widgetTree, "TOOLScale", "", {R=0.8, G=0.8, B=0.8, A=1.0})
     undoRedoText = createTextBlock(widgetTree, "TOOLUndoRedo", "", {R=0.6, G=0.6, B=0.6, A=1.0})
     statusText = createTextBlock(widgetTree, "TOOLStatus", "Press F2 to activate", {R=1.0, G=0.8, B=0.2, A=1.0})
-    helpText = createTextBlock(widgetTree, "TOOLHelp", "G/R/S/E=Mode  X/Y/Z=Axis  Arrows=Nudge", {R=0.5, G=0.5, B=0.5, A=1.0})
+    helpText = createTextBlock(widgetTree, "TOOLHelp", "G/R/S/E=Mode  X/Y/Z=Axis  Arrows=Nudge  F4=Browse", {R=0.5, G=0.5, B=0.5, A=1.0})
+
+    -- Browser header + row widgets (collapsed by default; populated via
+    -- Overlay.openBrowser / Overlay.renderBrowser at runtime).
+    browserHeader = createTextBlock(widgetTree, "TOOLBrowseHeader", "",
+        {R = 1.0, G = 0.7, B = 0.3, A = 1.0})
+    for i = 1, Overlay.browserPageSize do
+        browserRows[i] = createTextBlock(widgetTree, "TOOLBrowseRow" .. i, "",
+            {R = 0.7, G = 0.7, B = 0.7, A = 1.0})
+    end
+    browserHint = createTextBlock(widgetTree, "TOOLBrowseHint",
+        "Up/Down select  |  PgUp/PgDn page  |  Enter confirm  |  Esc cancel",
+        {R = 0.6, G = 0.6, B = 0.6, A = 1.0})
 
     -- Build hierarchy: add text blocks to vbox, vbox to border, border to canvas
     if vbox then
-        local textWidgets = {titleText, modeText, axisText, objectText, posText, rotText, scaleText, undoRedoText, statusText, helpText}
+        local textWidgets = {
+            titleText, modeText, axisText, objectText,
+            posText, rotText, scaleText, undoRedoText,
+            statusText, helpText,
+            browserHeader,
+        }
         for _, tw in ipairs(textWidgets) do
-            if tw then
-                vbox:AddChildToVerticalBox(tw)
+            if tw then vbox:AddChildToVerticalBox(tw) end
+        end
+        for i = 1, Overlay.browserPageSize do
+            if browserRows[i] then
+                vbox:AddChildToVerticalBox(browserRows[i])
             end
         end
+        if browserHint then vbox:AddChildToVerticalBox(browserHint) end
+    end
+
+    -- Browser rows / header / hint start hidden (ESlateVisibility::Collapsed = 1).
+    if browserHeader then browserHeader:SetVisibility(1) end
+    if browserHint then browserHint:SetVisibility(1) end
+    for i = 1, Overlay.browserPageSize do
+        if browserRows[i] then browserRows[i]:SetVisibility(1) end
     end
 
     if bgBorder and vbox then
@@ -265,6 +303,162 @@ function Overlay.destroy()
     end
     Overlay.isCreated = false
     Overlay.isVisible = false
+end
+
+-- ============================================================================
+-- In-overlay actor browser (keyboard-driven list)
+-- Driven from main.lua: F4/F5 open, arrows/page navigate, Enter confirms,
+-- Esc cancels. Writes Overlay.browser* state and re-renders rows.
+-- ============================================================================
+
+local HIGHLIGHT_COLOR = {R = 1.0, G = 0.9, B = 0.4, A = 1.0}
+local DIM_COLOR       = {R = 0.7, G = 0.7, B = 0.7, A = 1.0}
+
+local function truncateName(name, max)
+    max = max or 55
+    if #name > max then return "..." .. name:sub(-(max - 3)) end
+    return name
+end
+
+local function setColor(widget, color)
+    if widget and color then
+        pcall(function()
+            widget:SetColorAndOpacity({
+                SpecifiedColor = color,
+                ColorUseRule = 0,
+            })
+        end)
+    end
+end
+
+function Overlay.renderBrowser()
+    if not Overlay.isCreated then return end
+
+    local visible = Overlay.browserVisible
+    local items = Overlay.browserItems
+    local idx = Overlay.browserIndex
+    local offset = Overlay.browserOffset
+    local pageSize = Overlay.browserPageSize
+
+    if browserHeader then
+        if visible then
+            browserHeader:SetText(FText(string.format(
+                "Browse: %d / %d    (class: %s)",
+                idx, #items,
+                tostring(Overlay.browserClassName or ""))))
+            browserHeader:SetVisibility(0)
+        else
+            browserHeader:SetVisibility(1)
+        end
+    end
+
+    if browserHint then
+        browserHint:SetVisibility(visible and 0 or 1)
+    end
+
+    for i = 1, pageSize do
+        local tb = browserRows[i]
+        if tb then
+            if visible then
+                local itemIdx = offset + i
+                local item = items[itemIdx]
+                if item then
+                    local marker = (itemIdx == idx) and "> " or "  "
+                    tb:SetText(FText(string.format(
+                        "%s%d. %s",
+                        marker, itemIdx,
+                        truncateName(item.name or ""))))
+                    setColor(tb, (itemIdx == idx) and HIGHLIGHT_COLOR or DIM_COLOR)
+                    tb:SetVisibility(0)
+                else
+                    tb:SetVisibility(1)
+                end
+            else
+                tb:SetVisibility(1)
+            end
+        end
+    end
+end
+
+function Overlay.openBrowser(className, maxResults)
+    className = className or "StaticMeshActor"
+    maxResults = maxResults or 50
+
+    if not Overlay.isCreated then
+        if not Overlay.create() then
+            print("[InZoi TOOL] Cannot open browser: overlay not ready yet\n")
+            return false
+        end
+    end
+
+    local found = FindAllOf(className)
+    if type(found) ~= "table" then found = {} end
+
+    local items = {}
+    for _, a in ipairs(found) do
+        if a and a.IsValid and a:IsValid() then
+            table.insert(items, {actor = a, name = a:GetFullName()})
+            if #items >= maxResults then break end
+        end
+    end
+
+    if #items == 0 then
+        print(string.format(
+            "[InZoi TOOL] Browser: no instances of '%s' found\n",
+            tostring(className)))
+        Overlay.browserVisible = false
+        Overlay.renderBrowser()
+        return false
+    end
+
+    Overlay.browserClassName = className
+    Overlay.browserItems = items
+    Overlay.browserIndex = 1
+    Overlay.browserOffset = 0
+    Overlay.browserVisible = true
+    Overlay.renderBrowser()
+    print(string.format(
+        "[InZoi TOOL] Browser: %d instances of '%s' - arrows to navigate, Enter to select\n",
+        #items, className))
+    return true
+end
+
+function Overlay.closeBrowser()
+    Overlay.browserVisible = false
+    Overlay.browserItems = {}
+    Overlay.browserIndex = 1
+    Overlay.browserOffset = 0
+    Overlay.renderBrowser()
+end
+
+function Overlay.browserMove(delta)
+    if not Overlay.browserVisible then return end
+    local n = #Overlay.browserItems
+    if n == 0 then return end
+
+    local idx = Overlay.browserIndex + delta
+    if idx < 1 then idx = 1 end
+    if idx > n then idx = n end
+    Overlay.browserIndex = idx
+
+    local pageSize = Overlay.browserPageSize
+    if (idx - 1) < Overlay.browserOffset then
+        Overlay.browserOffset = idx - 1
+    elseif (idx - 1) >= Overlay.browserOffset + pageSize then
+        Overlay.browserOffset = idx - pageSize
+    end
+    Overlay.renderBrowser()
+end
+
+function Overlay.browserConfirm()
+    if not Overlay.browserVisible then return false end
+    local item = Overlay.browserItems[Overlay.browserIndex]
+    local M = Overlay.manipulator
+    if item and item.actor and M and M.selectActor then
+        M.selectActor(item.actor)
+    end
+    Overlay.closeBrowser()
+    return true
 end
 
 return Overlay

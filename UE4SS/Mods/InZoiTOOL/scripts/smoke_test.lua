@@ -170,6 +170,78 @@ check(found and found.stepCount == 2,
     tostring(found and found.stepCount))
 
 -- ============================================================================
+-- (4b) Overlay browser: open, navigate with arrows, confirm selects actor
+-- ============================================================================
+
+do
+    local Overlay = require("overlay")
+
+    -- Build two distinct fake actors so FindAllOf returns a multi-row list
+    -- and we can verify arrow-navigation picks the second one.
+    local actorA = {
+        _loc = { X = 10, Y = 0, Z = 0 },
+        _rot = { Pitch = 0, Yaw = 0, Roll = 0 },
+        _scale = { X = 1, Y = 1, Z = 1 },
+        _name = "/Game/Fake/A.A_C",
+    }
+    local actorB = {
+        _loc = { X = 20, Y = 0, Z = 0 },
+        _rot = { Pitch = 0, Yaw = 0, Roll = 0 },
+        _scale = { X = 1, Y = 1, Z = 1 },
+        _name = "/Game/Fake/B.B_C",
+    }
+    for _, a in ipairs({ actorA, actorB }) do
+        function a:IsValid() return true end
+        function a:K2_GetActorLocation() return self._loc end
+        function a:K2_SetActorLocation(loc) self._loc = loc end
+        function a:K2_GetActorRotation() return self._rot end
+        function a:K2_SetActorRotation(rot) self._rot = rot end
+        function a:GetActorScale3D() return self._scale end
+        function a:SetActorScale3D(s) self._scale = s end
+        function a:GetFullName() return self._name end
+    end
+
+    -- Swap FindAllOf so the browser sees the two-actor list.
+    local prevFindAll = FindAllOf
+    FindAllOf = function() return { actorA, actorB } end
+
+    -- Overlay must be created before openBrowser can operate; in smoke
+    -- harness StaticConstructObject returns a permissive stub so create()
+    -- succeeds.
+    Overlay.create()
+
+    local opened = Overlay.openBrowser("StaticMeshActor", 50)
+    check(opened, "Overlay.openBrowser opened with 2 fake actors")
+    check(Overlay.browserVisible, "browser is visible after open")
+    check(#Overlay.browserItems == 2,
+        "browser has 2 items, got " .. tostring(#Overlay.browserItems))
+    check(Overlay.browserIndex == 1,
+        "browser starts at index 1, got " .. tostring(Overlay.browserIndex))
+
+    Overlay.browserMove(1)
+    check(Overlay.browserIndex == 2,
+        "Down-arrow advances browser to index 2, got "
+        .. tostring(Overlay.browserIndex))
+
+    Overlay.browserMove(99)
+    check(Overlay.browserIndex == 2,
+        "browser clamps to last item at index 2, got "
+        .. tostring(Overlay.browserIndex))
+
+    Overlay.browserConfirm()
+    check(not Overlay.browserVisible, "browser closes after confirm")
+
+    local Manipulator = require("manipulator")
+    check(Manipulator.selectedActor == actorB,
+        "confirmed selection resolved to second actor (actorB)")
+
+    -- Restore FindAllOf and re-select the original fakeActor so downstream
+    -- tests (tool move, macro recording) continue to operate on it.
+    FindAllOf = prevFindAll
+    Manipulator.selectActor(fakeActor)
+end
+
+-- ============================================================================
 -- (5) In-game console command "tool" dispatches subcommands correctly
 -- ============================================================================
 
